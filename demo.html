@@ -17,7 +17,6 @@
       padding: 20px;
       flex-wrap: wrap;
     }
-    /* Moldura simulando um Smartphone */
     .phone {
       width: 340px;
       height: 620px;
@@ -43,8 +42,6 @@
     }
     .balance-label { color: #64748b; font-size: 14px; margin: 0; }
     .balance-value { color: #0f172a; font-size: 36px; font-weight: 800; margin: 4px 0 0 0; }
-
-    /* Área dinâmica que reage ao Estado */
     .status-box {
       min-height: 110px;
       border-radius: 12px;
@@ -60,8 +57,7 @@
     }
     .status-LOADING { background: #fef3c7; color: #b45309; }
     .status-SUCCESS { background: #dcfce7; color: #15803d; }
-    .status-ERROR   { background: #fee2e2; color: #b91c1c; }
-
+    .status-ERROR { background: #fee2e2; color: #b91c1c; }
     .actions { display: flex; flex-direction: column; gap: 10px; }
     button {
       padding: 14px;
@@ -74,10 +70,8 @@
     }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: #8b5cf6; color: white; }
-    .btn-danger  { background: #ef4444; color: white; }
-    .btn-reset   { background: #e2e8f0; color: #0f172a; font-size: 13px; padding: 10px; }
-
-    /* Painel lateral mostrando o Estado em Tempo Real para a turma ver */
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-reset { background: #e2e8f0; color: #0f172a; font-size: 13px; padding: 10px; }
     .inspector {
       width: 380px;
       background: #1e293b;
@@ -100,10 +94,9 @@
 </head>
 <body>
 
-  <!-- 1. CAMADA DE VIEW (Interface Burra e Reativa) -->
   <div class="phone">
     <div class="header">
-      <!-- <span class="badge">NuDemo • Arquitetura MVI</span> -->
+      <span class="badge">NuDemo • Arquitetura MVI</span>
       <p class="balance-label">Saldo Disponível</p>
       <p class="balance-value" id="ui-balance">R$ 500,00</p>
     </div>
@@ -125,7 +118,6 @@
     </div>
   </div>
 
-  <!-- PAINEL DIDÁTICO PARA EXPLICAR NA APRESENTAÇÃO -->
   <div class="inspector">
     <h3>Estado Único Imutável (State)</h3>
     <pre id="state-json"></pre>
@@ -135,24 +127,17 @@
   </div>
 
   <script>
-    // =========================================================================
-    // 2. MODELO DE ESTADO ÚNICO (Nunca há estados conflitantes)
-    // =========================================================================
     let currentState = {
-      status: 'IDLE', // 'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'
+      status: 'IDLE',
       balance: 500,
       message: 'Pronto para transferir'
     };
 
-    // Função pura que atualiza o estado e manda a UI se redesenhar
     function setState(newState) {
-      currentState = Object.freeze({ ...newState }); // Imutabilidade
+      currentState = Object.freeze({ ...newState });
       renderView(currentState);
     }
 
-    // =========================================================================
-    // 3. VIEWMODEL / CAMADA DE DOMÍNIO (Regra de Negócio Isolada da UI)
-    // =========================================================================
     async function dispatchIntent(intent) {
       if (intent === 'RESET') {
         logEvent('Intent: RESET -> Restaurando estado inicial.');
@@ -160,13 +145,11 @@
         return;
       }
 
-      // REGRA DE NEGÓCIO 1: Bloqueio contra duplo clique (Idempotência)
       if (currentState.status === 'LOADING') {
         logEvent('⚠️ Clique bloqueado! Já existe uma transação em andamento.');
         return;
       }
 
-      // REGRA DE NEGÓCIO 2: Validação de saldo antes de chamar rede
       if (currentState.balance < 100) {
         setState({
           status: 'ERROR',
@@ -176,7 +159,6 @@
         return;
       }
 
-      // Transição explícita para LOADING
       logEvent(`Intent: ${intent} -> Processando na rede...`);
       setState({
         status: 'LOADING',
@@ -184,12 +166,10 @@
         message: 'Processando Pix com segurança...'
       });
 
-      // Simulação da camada Repository (Rede)
       const simulateOffline = intent === 'TRANSFER_OFFLINE';
       try {
         await fakeNetworkCall(simulateOffline);
 
-        // Sucesso: atualiza saldo de forma atômica
         setState({
           status: 'SUCCESS',
           balance: currentState.balance - 100,
@@ -197,7 +177,6 @@
         });
         logEvent('✅ Transação concluída. Novo estado emitido.');
       } catch (error) {
-        // Falha de rede: saldo permanece intacto
         setState({
           status: 'ERROR',
           balance: currentState.balance,
@@ -213,9 +192,6 @@
       });
     }
 
-    // =========================================================================
-    // 4. RENDERIZADOR DA VIEW (Apenas espelha o estado atual)
-    // =========================================================================
     function renderView(state) {
       document.getElementById('ui-balance').innerText =
         `R$ ${state.balance.toFixed(2).replace('.', ',')}`;
@@ -224,12 +200,10 @@
       statusBox.innerText = state.message;
       statusBox.className = `status-box status-${state.status}`;
 
-      // Desabilita botões automaticamente enquanto carrega
       const isLoading = state.status === 'LOADING';
       document.getElementById('btn-online').disabled = isLoading;
       document.getElementById('btn-offline').disabled = isLoading;
 
-      // Atualiza o inspetor visual ao lado
       document.getElementById('state-json').innerText = JSON.stringify(state, null, 2);
     }
 
@@ -237,7 +211,6 @@
       document.getElementById('event-log').innerText = text;
     }
 
-    // Inicializa a tela
     renderView(currentState);
   </script>
 </body>
