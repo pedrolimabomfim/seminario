@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo Arquitetura Mobile - MVI / UDF</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body {
+      background: #0f172a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      gap: 32px;
+      padding: 20px;
+      flex-wrap: wrap;
+    }
+    /* Moldura simulando um Smartphone */
+    .phone {
+      width: 340px;
+      height: 620px;
+      background: #ffffff;
+      border-radius: 36px;
+      border: 8px solid #334155;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .header { text-align: center; }
+    .badge {
+      background: #8b5cf6;
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+      padding: 4px 12px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+    .balance-label { color: #64748b; font-size: 14px; margin: 0; }
+    .balance-value { color: #0f172a; font-size: 36px; font-weight: 800; margin: 4px 0 0 0; }
+
+    /* Área dinâmica que reage ao Estado */
+    .status-box {
+      min-height: 110px;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-weight: 600;
+      font-size: 15px;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .status-LOADING { background: #fef3c7; color: #b45309; }
+    .status-SUCCESS { background: #dcfce7; color: #15803d; }
+    .status-ERROR   { background: #fee2e2; color: #b91c1c; }
+
+    .actions { display: flex; flex-direction: column; gap: 10px; }
+    button {
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #8b5cf6; color: white; }
+    .btn-danger  { background: #ef4444; color: white; }
+    .btn-reset   { background: #e2e8f0; color: #0f172a; font-size: 13px; padding: 10px; }
+
+    /* Painel lateral mostrando o Estado em Tempo Real para a turma ver */
+    .inspector {
+      width: 380px;
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 24px;
+      border-radius: 16px;
+      border: 1px solid #334155;
+    }
+    .inspector h3 { margin-top: 0; color: #38bdf8; font-size: 16px; }
+    pre {
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #a7f3d0;
+      overflow-x: auto;
+    }
+    .log { font-size: 13px; color: #94a3b8; margin-top: 12px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. CAMADA DE VIEW (Interface Burra e Reativa) -->
+  <div class="phone">
+    <div class="header">
+      <!-- <span class="badge">NuDemo • Arquitetura MVI</span> -->
+      <p class="balance-label">Saldo Disponível</p>
+      <p class="balance-value" id="ui-balance">R$ 500,00</p>
+    </div>
+
+    <div class="status-box" id="ui-status-box">
+      Pronto para transferir
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="btn-online" onclick="dispatchIntent('TRANSFER_ONLINE')">
+        Transferir R$ 100 (Online)
+      </button>
+      <button class="btn-danger" id="btn-offline" onclick="dispatchIntent('TRANSFER_OFFLINE')">
+        Transferir R$ 100 (Simular Queda 5G)
+      </button>
+      <button class="btn-reset" onclick="dispatchIntent('RESET')">
+        Resetar Saldo
+      </button>
+    </div>
+  </div>
+
+  <!-- PAINEL DIDÁTICO PARA EXPLICAR NA APRESENTAÇÃO -->
+  <div class="inspector">
+    <h3>Estado Único Imutável (State)</h3>
+    <pre id="state-json"></pre>
+    <div class="log" id="event-log">
+      Clique nos botões do celular ao lado para disparar Intents (Ações).
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 2. MODELO DE ESTADO ÚNICO (Nunca há estados conflitantes)
+    // =========================================================================
+    let currentState = {
+      status: 'IDLE', // 'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'
+      balance: 500,
+      message: 'Pronto para transferir'
+    };
+
+    // Função pura que atualiza o estado e manda a UI se redesenhar
+    function setState(newState) {
+      currentState = Object.freeze({ ...newState }); // Imutabilidade
+      renderView(currentState);
+    }
+
+    // =========================================================================
+    // 3. VIEWMODEL / CAMADA DE DOMÍNIO (Regra de Negócio Isolada da UI)
+    // =========================================================================
+    async function dispatchIntent(intent) {
+      if (intent === 'RESET') {
+        logEvent('Intent: RESET -> Restaurando estado inicial.');
+        setState({ status: 'IDLE', balance: 500, message: 'Pronto para transferir' });
+        return;
+      }
+
+      // REGRA DE NEGÓCIO 1: Bloqueio contra duplo clique (Idempotência)
+      if (currentState.status === 'LOADING') {
+        logEvent('⚠️ Clique bloqueado! Já existe uma transação em andamento.');
+        return;
+      }
+
+      // REGRA DE NEGÓCIO 2: Validação de saldo antes de chamar rede
+      if (currentState.balance < 100) {
+        setState({
+          status: 'ERROR',
+          balance: currentState.balance,
+          message: 'Saldo insuficiente para transferir R$ 100.'
+        });
+        return;
+      }
+
+      // Transição explícita para LOADING
+      logEvent(`Intent: ${intent} -> Processando na rede...`);
+      setState({
+        status: 'LOADING',
+        balance: currentState.balance,
+        message: 'Processando Pix com segurança...'
+      });
+
+      // Simulação da camada Repository (Rede)
+      const simulateOffline = intent === 'TRANSFER_OFFLINE';
+      try {
+        await fakeNetworkCall(simulateOffline);
+
+        // Sucesso: atualiza saldo de forma atômica
+        setState({
+          status: 'SUCCESS',
+          balance: currentState.balance - 100,
+          message: 'Pix de R$ 100,00 realizado!'
+        });
+        logEvent('✅ Transação concluída. Novo estado emitido.');
+      } catch (error) {
+        // Falha de rede: saldo permanece intacto
+        setState({
+          status: 'ERROR',
+          balance: currentState.balance,
+          message: 'Sem conexão! O valor não foi descontado.'
+        });
+        logEvent('❌ Falha de rede capturada. Saldo protegido.');
+      }
+    }
+
+    function fakeNetworkCall(shouldFail) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => (shouldFail ? reject(new Error('Offline')) : resolve()), 1500);
+      });
+    }
+
+    // =========================================================================
+    // 4. RENDERIZADOR DA VIEW (Apenas espelha o estado atual)
+    // =========================================================================
+    function renderView(state) {
+      document.getElementById('ui-balance').innerText =
+        `R$ ${state.balance.toFixed(2).replace('.', ',')}`;
+
+      const statusBox = document.getElementById('ui-status-box');
+      statusBox.innerText = state.message;
+      statusBox.className = `status-box status-${state.status}`;
+
+      // Desabilita botões automaticamente enquanto carrega
+      const isLoading = state.status === 'LOADING';
+      document.getElementById('btn-online').disabled = isLoading;
+      document.getElementById('btn-offline').disabled = isLoading;
+
+      // Atualiza o inspetor visual ao lado
+      document.getElementById('state-json').innerText = JSON.stringify(state, null, 2);
+    }
+
+    function logEvent(text) {
+      document.getElementById('event-log').innerText = text;
+    }
+
+    // Inicializa a tela
+    renderView(currentState);
+  </script>
+</body>
+</html>
